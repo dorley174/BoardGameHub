@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, create_engine
-from models import User
+from .models import *
 
 class Database:
     def __init__(self, db_path='BoardGameHub.db'):

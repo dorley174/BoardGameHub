@@ -2,7 +2,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import dotenv
 import os
-from db import Database
+
+from sqlmodel import Session
+from .db import Database
+from .api.users import router as users_router
 
 # Configuration
 dotenv.load_dotenv()
@@ -13,12 +16,24 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 # Application and database
 app = FastAPI()
 db = Database()
-db.connect()
+
+
+def get_session():
+    with Session(db.get_engine()) as session:
+        yield session
 
 
 @app.get("/")
 def app_root(request: Request):
     return {}
+
+
+@app.get("/health")
+def app_root(request: Request):
+    return {'status': 'ok'}
+
+
+app.include_router(users_router)
 
 
 @app.exception_handler(404)
@@ -45,4 +60,5 @@ def internal_server_error(request: Request, exception: Exception):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host=HOST, port=PORT, reload=DEBUG)
+    db.connect()
+    uvicorn.run("src.main:app", host=HOST, port=PORT, reload=DEBUG)

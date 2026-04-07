@@ -11,9 +11,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
+from sqlmodel import SQLModel
 
-from src.db import Base, get_db  # noqa: E402
-from src.main import app  # noqa: E402
+from src.main import app, get_session  # noqa: E402
 
 
 @pytest.fixture()
@@ -29,20 +29,20 @@ def client() -> TestClient:
         autoflush=False,
         expire_on_commit=False,
     )
-    Base.metadata.create_all(bind=test_engine)
+    SQLModel.metadata.create_all(bind=test_engine)
 
-    def override_get_db():
+    def override_get_session():
         db = testing_session_local()
         try:
             yield db
         finally:
             db.close()
 
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_session] = override_get_session
 
     with TestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=test_engine)
+    SQLModel.metadata.drop_all(bind=test_engine)
     test_engine.dispose()
