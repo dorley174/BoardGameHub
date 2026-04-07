@@ -1,0 +1,1 @@
+"""BoardGameHub package."""
