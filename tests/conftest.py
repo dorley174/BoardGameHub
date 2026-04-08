@@ -7,13 +7,14 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import create_engine  # noqa: E402
-from sqlalchemy.orm import sessionmaker  # noqa: E402
-from sqlalchemy.pool import StaticPool  # noqa: E402
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 
-from src.main import app, get_session  # noqa: E402
+from src.main import app
+from src.db import get_session
 
 
 @pytest.fixture()

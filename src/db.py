@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import SQLModel, Session, create_engine
 from .models import *
 
 class Database:
@@ -8,3 +8,10 @@ class Database:
     def connect(self):
         self.engine = create_engine(f'sqlite:///{self.db_path}', echo=True)
         SQLModel.metadata.create_all(self.engine)
+
+
+db = Database()
+
+def get_session():
+    with Session(db.get_engine()) as session:
+        yield session

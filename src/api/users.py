@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 from .. import crud, schemas
-from ..db import get_db
+from ..db import get_session
 
 router = APIRouter(prefix="/users", tags=["users"])
-DbSession = Annotated[Session, Depends(get_db)]
+DbSession = Annotated[Session, Depends(get_session)]
 
 
 @router.post(

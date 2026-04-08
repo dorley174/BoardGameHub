@@ -3,8 +3,7 @@ from fastapi.responses import JSONResponse
 import dotenv
 import os
 
-from sqlmodel import Session
-from .db import Database
+from .db import db
 from .api.users import router as users_router
 
 # Configuration
@@ -15,12 +14,6 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Application and database
 app = FastAPI()
-db = Database()
-
-
-def get_session():
-    with Session(db.get_engine()) as session:
-        yield session
 
 
 @app.get("/")
