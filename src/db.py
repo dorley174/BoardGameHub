@@ -9,6 +9,9 @@ class Database:
         self.engine = create_engine(f'sqlite:///{self.db_path}', echo=True)
         SQLModel.metadata.create_all(self.engine)
 
+    def get_engine(self):
+        return self.engine
+
 
 db = Database()
 
