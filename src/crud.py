@@ -9,6 +9,10 @@ from .schemas import GroupCreate, UserCreate
 
 def create_user(session: Session, user_in: UserCreate) -> User:
     """Persist a new user in the database."""
+    existing_user = get_user_by_username(session, user_in.userName)
+    if existing_user is not None:
+        raise ValueError("Username already exists.")
+    
     user = User(userName=user_in.userName)
     session.add(user)
     session.commit()
