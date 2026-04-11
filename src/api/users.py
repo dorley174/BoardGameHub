@@ -24,6 +24,11 @@ def create_user(
     """Create a new user with a unique username."""
     try:
         return crud.create_user(db, user_in)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already exists.",
+        ) from exc
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
