@@ -10,6 +10,21 @@
 
 ## Testing
 
+### Locust
+
+- Start an app with
+```python
+python -m uvicorn src.main:app --reload  
+```
+
+- In other terminal
+```python
+python -m locust -f .\locustfile.py --host http://127.0.0.1:8000
+```
+
+
+### Other utilities
+
 ```python
 python -m pytest -q
 python -m flake8 src
