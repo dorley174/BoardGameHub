@@ -1,0 +1,4 @@
+# Bandit config (use: bandit -c .bandit -r src)
+# B101 (assert_used): pytest relies on assert; keep skipped when scanning mixed trees.
+skips:
+  - B101

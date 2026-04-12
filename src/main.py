@@ -1,11 +1,15 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import dotenv
 import os
 
-from .db import db
-from .api.users import router as users_router
+import dotenv
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from .api.games import router as games_router
 from .api.groups import router as groups_router
+from .api.users import router as users_router
+from .db import db
+
 
 dotenv.load_dotenv()
 HOST = os.getenv("HOST", "127.0.0.1")
@@ -31,26 +35,36 @@ def health(request: Request):
 
 
 app.include_router(users_router)
+app.include_router(games_router)
 app.include_router(groups_router)
 
 
-@app.exception_handler(404)
-def not_found(request: Request, exception: Exception):
+@app.exception_handler(StarletteHTTPException)
+def http_exception_handler(
+    request: Request,
+    exception: StarletteHTTPException,
+):
+    if exception.status_code == 404 and exception.detail == "Not Found":
+        return JSONResponse(
+            {
+                "error": "Not Found",
+                "message": "Endpoint does not exist",
+            },
+            status_code=404,
+        )
+
     return JSONResponse(
-        {
-            "error": "Not Found",
-            "message": "Endpoint does not exist",
-        },
-        status_code=404,
+        {"detail": exception.detail},
+        status_code=exception.status_code,
     )
 
 
-@app.exception_handler(500)
+@app.exception_handler(Exception)
 def internal_server_error(request: Request, exception: Exception):
     return JSONResponse(
         {
             "error": "Internal Server Error",
-            "message": "An unexpected error ocured",
+            "message": "An unexpected error occurred",
         },
         status_code=500,
     )
