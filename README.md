@@ -96,6 +96,13 @@ Then:
 poetry export -f requirements.txt --output requirements.txt --without-hashes
 ```
 
+### Demo UI screenshot
+
+![BoardGameHub Streamlit UI](docs/images/streamlit-ui.png)
+
+*Figure 1. Simple Streamlit UI for manual exploratory testing and demo flows.
+The interface supports core minimal-scope actions such as creating users, managing groups, inviting members, and viewing the collective game list.*
+
 ## Testing
 
 ### Locust (performance)
