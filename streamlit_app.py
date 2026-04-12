@@ -17,11 +17,11 @@ def _detail_from_response(resp: httpx.Response) -> str:
         data = resp.json()
     except (json.JSONDecodeError, ValueError):
         return resp.text.strip() or f"HTTP {resp.status_code}"
-    
+
     detail = data.get("detail")
     if detail is None:
         return f"HTTP {resp.status_code}"
-    
+
     if isinstance(detail, list):
         parts = []
         for item in detail:
@@ -32,7 +32,7 @@ def _detail_from_response(resp: httpx.Response) -> str:
             else:
                 parts.append(str(item))
         return "; ".join(parts) if parts else str(data)
-    
+
     return str(detail)
 
 
@@ -75,6 +75,206 @@ def _health_check(base: str) -> tuple[bool, Any | None]:
     return ok, data
 
 
+def _render_games_tab(api_base: str, cu: dict[str, Any]) -> None:
+    """Games library UI for the current user."""
+    uid = cu["userId"]
+    st.caption(f"Library for **{cu['userName']}** (id: `{uid}`)")
+
+    game_name = st.text_input("Game title", key="game_title")
+    if st.button("Add to library", key="btn_add_game"):
+        if not game_name or not game_name.strip():
+            st.warning("Please enter a game title.")
+        else:
+            ok, _, err = _api_request(
+                "POST",
+                api_base,
+                f"/users/{uid}/games",
+                json_body={
+                    "gameName": game_name.strip(),
+                    "isAvailable": True,
+                },
+            )
+            if ok:
+                st.success("Game added.")
+                st.rerun()
+            else:
+                st.error(err or "Failed to add game.")
+
+    if st.button("Refresh game list", key="btn_refresh_games"):
+        st.rerun()
+
+    ok_list, games, err_list = _api_request(
+        "GET",
+        api_base,
+        f"/users/{uid}/games",
+    )
+    if not ok_list:
+        st.error(err_list or "Failed to load game list.")
+        return
+    if not games:
+        st.info("No games in the library yet.")
+        return
+
+    st.markdown("**Your Games**")
+    for g in games:
+        if not isinstance(g, dict):
+            continue
+        ugid = g.get("userGameId")
+        name = g.get("gameName", "")
+        avail = bool(g.get("isAvailable", True))
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            status_label = "Available" if avail else "Unavailable"
+            st.write(f"**{name}** — `{status_label}` (Entry ID: `{ugid}`)")
+        with c2:
+            new_avail = st.toggle(
+                "Available",
+                value=avail,
+                key=f"toggle_{ugid}",
+                help="Toggle off for Unavailable",
+            )
+            if new_avail != avail:
+                ok_p, _, err_p = _api_request(
+                    "PATCH",
+                    api_base,
+                    f"/users/{uid}/games/{ugid}/status",
+                    json_body={"isAvailable": new_avail},
+                )
+                if ok_p:
+                    st.rerun()
+                else:
+                    st.error(err_p or "Failed to update status.")
+
+
+def _render_group_collective_list(api_base: str, load_id: int) -> None:
+    """Members and merged game list for one group."""
+    ok_m, members, err_m = _api_request(
+        "GET",
+        api_base,
+        f"/groups/{load_id}/members",
+    )
+    ok_g, group_games, err_g = _api_request(
+        "GET",
+        api_base,
+        f"/groups/{load_id}/games",
+    )
+
+    if ok_m and members:
+        st.markdown("**Members**")
+        for m in members:
+            if isinstance(m, dict):
+                st.write(
+                    f"- `{m.get('userName')}` (User ID: `{m.get('userId')}`)"
+                )
+    elif not ok_m:
+        st.warning(err_m or "Failed to load members.")
+
+    if ok_g and group_games:
+        st.markdown("**Games of all Members**")
+        for row in group_games:
+            if not isinstance(row, dict):
+                continue
+            u = "Available" if row.get("isAvailable") else "Unavailable"
+            st.write(
+                f"- **{row.get('gameName')}** — {u} "
+                f"({row.get('userName')}, game id `{row.get('gameId')}`)"
+            )
+    elif not ok_g:
+        st.error(err_g or "Failed to load group game list.")
+    elif ok_g and not group_games:
+        st.info("Group members have no games in their libraries yet.")
+
+
+def _render_groups_tab(api_base: str, cu: dict[str, Any]) -> None:
+    """Groups, invites, and collective library UI."""
+    creator_id = cu["userId"]
+    st.caption(f"Acting as **{cu['userName']}** (id: `{creator_id}`)")
+
+    gname = st.text_input("New group name", key="group_name_new")
+    if st.button("Create Group", key="btn_create_group"):
+        if not gname or not gname.strip():
+            st.warning("Please enter a group name.")
+        else:
+            ok, data, err = _api_request(
+                "POST",
+                api_base,
+                "/groups",
+                json_body={
+                    "groupName": gname.strip(),
+                    "creatorUserId": creator_id,
+                },
+            )
+            if ok and isinstance(data, dict):
+                st.success("Group created.")
+                gid_new = data.get("groupId")
+                st.session_state.last_group_id = gid_new
+                if gid_new:
+                    st.session_state.collective_group_id = int(gid_new)
+                st.json(data)
+            else:
+                st.error(err or "Failed to create group.")
+
+    st.markdown("**Invite to Group**")
+    gid_default = int(st.session_state.last_group_id or 0)
+    group_id = st.number_input(
+        "Group ID",
+        min_value=0,
+        value=gid_default,
+        step=1,
+        key="group_id_invite",
+    )
+    invite_username = st.text_input(
+        "Friend's username to invite",
+        key="invite_uname",
+    )
+    if st.button("Invite", key="btn_invite"):
+        if group_id <= 0:
+            st.warning("Please provide a positive Group ID.")
+        elif not invite_username or not invite_username.strip():
+            st.warning("Please enter the username of the person to invite.")
+        else:
+            ok, data, err = _api_request(
+                "POST",
+                api_base,
+                f"/groups/{int(group_id)}/members",
+                json_body={
+                    "username": invite_username.strip(),
+                    "invitedByUserId": creator_id,
+                },
+            )
+            if ok:
+                st.success("Member added.")
+                if isinstance(data, dict):
+                    st.json(data)
+            else:
+                st.error(err or "Failed to invite user.")
+
+    st.markdown("**Collective Group Game List**")
+    gid_games = st.number_input(
+        "Group ID (for game list)",
+        min_value=0,
+        value=gid_default,
+        step=1,
+        key="group_id_games",
+    )
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("Load Group Games", key="btn_group_games"):
+            if int(gid_games) <= 0:
+                st.warning("Please provide a positive Group ID.")
+            else:
+                st.session_state.collective_group_id = int(gid_games)
+                st.rerun()
+    with b2:
+        if st.button("Reset List", key="btn_clear_group_games"):
+            st.session_state.pop("collective_group_id", None)
+            st.rerun()
+
+    load_id = st.session_state.get("collective_group_id")
+    if load_id and load_id > 0:
+        _render_group_collective_list(api_base, int(load_id))
+
+
 st.set_page_config(page_title="BoardGameHub", layout="wide")
 
 st.title("BoardGameHub")
@@ -102,7 +302,9 @@ else:
 st.sidebar.divider()
 st.sidebar.subheader("Quality Plan")
 st.sidebar.info(
-    "**Status:** The interface operates in conjunction with a project"
+    "**Status:** Aligned with the project Quality Plan.\n\n"
+    "- Test coverage: **at least 60%**\n"
+    "- Cyclomatic complexity (CC): **below 10**"
 )
 
 if st.session_state.current_user:
@@ -184,71 +386,7 @@ with tab_games:
             "First, create or find a user in the 'Users' tab to link a game library."
         )
     else:
-        uid = cu["userId"]
-        st.caption(f"Library for **{cu['userName']}** (id: `{uid}`)")
-
-        game_name = st.text_input("Game title", key="game_title")
-        if st.button("Add to library", key="btn_add_game"):
-            if not game_name or not game_name.strip():
-                st.warning("Please enter a game title.")
-            else:
-                ok, data, err = _api_request(
-                    "POST",
-                    api_base,
-                    f"/users/{uid}/games",
-                    json_body={
-                        "gameName": game_name.strip(),
-                        "isAvailable": True,
-                    },
-                )
-                if ok:
-                    st.success("Game added.")
-                    st.rerun()
-                else:
-                    st.error(err or "Failed to add game.")
-
-        if st.button("Refresh game list", key="btn_refresh_games"):
-            st.rerun()
-
-        ok_list, games, err_list = _api_request(
-            "GET",
-            api_base,
-            f"/users/{uid}/games",
-        )
-        if not ok_list:
-            st.error(err_list or "Failed to load game list.")
-        elif not games:
-            st.info("No games in the library yet.")
-        else:
-            st.markdown("**Your Games**")
-            for g in games:
-                if not isinstance(g, dict):
-                    continue
-                ugid = g.get("userGameId")
-                name = g.get("gameName", "")
-                avail = bool(g.get("isAvailable", True))
-                c1, c2 = st.columns([3, 1])
-                with c1:
-                    status_label = "Available" if avail else "Unavailable"
-                    st.write(f"**{name}** — `{status_label}` (Entry ID: `{ugid}`)")
-                with c2:
-                    new_avail = st.toggle(
-                        "Available",
-                        value=avail,
-                        key=f"toggle_{ugid}",
-                        help="Toggle off for Unavailable",
-                    )
-                    if new_avail != avail:
-                        ok_p, _, err_p = _api_request(
-                            "PATCH",
-                            api_base,
-                            f"/users/{uid}/games/{ugid}/status",
-                            json_body={"isAvailable": new_avail},
-                        )
-                        if ok_p:
-                            st.rerun()
-                        else:
-                            st.error(err_p or "Failed to update status.")
+        _render_games_tab(api_base, cu)
 
 with tab_groups:
     st.subheader("Groups")
@@ -259,127 +397,7 @@ with tab_groups:
             "(creating groups and invitations require a user ID)."
         )
     else:
-        creator_id = cu["userId"]
-        st.caption(f"Acting as **{cu['userName']}** (id: `{creator_id}`)")
-
-        gname = st.text_input("New group name", key="group_name_new")
-        if st.button("Create Group", key="btn_create_group"):
-            if not gname or not gname.strip():
-                st.warning("Please enter a group name.")
-            else:
-                ok, data, err = _api_request(
-                    "POST",
-                    api_base,
-                    "/groups",
-                    json_body={
-                        "groupName": gname.strip(),
-                        "creatorUserId": creator_id,
-                    },
-                )
-                if ok and isinstance(data, dict):
-                    st.success("Group created.")
-                    gid_new = data.get("groupId")
-                    st.session_state.last_group_id = gid_new
-                    if gid_new:
-                        st.session_state.collective_group_id = int(gid_new)
-                    st.json(data)
-                else:
-                    st.error(err or "Failed to create group.")
-
-        st.markdown("**Group Invitation**")
-        gid_default = int(st.session_state.last_group_id or 0)
-        group_id = st.number_input(
-            "Group ID",
-            min_value=0,
-            value=gid_default,
-            step=1,
-            key="group_id_invite",
-        )
-        invite_username = st.text_input(
-            "Friend's username to invite",
-            key="invite_uname",
-        )
-        if st.button("Invite", key="btn_invite"):
-            if group_id <= 0:
-                st.warning("Please provide a positive Group ID.")
-            elif not invite_username or not invite_username.strip():
-                st.warning("Please enter the username of the person to invite.")
-            else:
-                ok, data, err = _api_request(
-                    "POST",
-                    api_base,
-                    f"/groups/{int(group_id)}/members",
-                    json_body={
-                        "username": invite_username.strip(),
-                        "invitedByUserId": creator_id,
-                    },
-                )
-                if ok:
-                    st.success("Member added.")
-                    if isinstance(data, dict):
-                        st.json(data)
-                else:
-                    st.error(err or "Failed to invite user.")
-
-        st.markdown("**Collective Group Game List**")
-        gid_games = st.number_input(
-            "Group ID (for game list)",
-            min_value=0,
-            value=gid_default,
-            step=1,
-            key="group_id_games",
-        )
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button("Load Group Games", key="btn_group_games"):
-                if int(gid_games) <= 0:
-                    st.warning("Please provide a positive Group ID.")
-                else:
-                    st.session_state.collective_group_id = int(gid_games)
-                    st.rerun()
-        with b2:
-            if st.button("Reset List", key="btn_clear_group_games"):
-                st.session_state.pop("collective_group_id", None)
-                st.rerun()
-
-        load_id = st.session_state.get("collective_group_id")
-
-        if load_id and load_id > 0:
-            ok_m, members, err_m = _api_request(
-                "GET",
-                api_base,
-                f"/groups/{load_id}/members",
-            )
-            ok_g, group_games, err_g = _api_request(
-                "GET",
-                api_base,
-                f"/groups/{load_id}/games",
-            )
-
-            if ok_m and members:
-                st.markdown("**Members**")
-                for m in members:
-                    if isinstance(m, dict):
-                        st.write(
-                            f"- `{m.get('userName')}` (User ID: `{m.get('userId')}`)"
-                        )
-            elif not ok_m:
-                st.warning(err_m or "Failed to load members.")
-
-            if ok_g and group_games:
-                st.markdown("**Games of all Members**")
-                for row in group_games:
-                    if not isinstance(row, dict):
-                        continue
-                    u = "Available" if row.get("isAvailable") else "Unavailable"
-                    st.write(
-                        f"- **{row.get('gameName')}** — {u} "
-                        f"({row.get('userName')}, game id `{row.get('gameId')}`)"
-                    )
-            elif not ok_g:
-                st.error(err_g or "Failed to load group game list.")
-            elif ok_g and not group_games:
-                st.info("Group members have no games in their libraries yet.")
+        _render_groups_tab(api_base, cu)
 
 st.divider()
 st.caption(

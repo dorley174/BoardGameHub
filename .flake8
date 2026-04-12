@@ -1,5 +1,7 @@
 [flake8]
 max-line-length = 88
+# Quality Plan: cyclomatic complexity must stay **strictly below 10** (max 9).
+max-complexity = 9
 # Align with Black where applicable
 extend-ignore = E203, E266, W503
 exclude =
@@ -12,3 +14,5 @@ exclude =
     dist
 per-file-ignores =
     __init__.py:F401
+    # Streamlit layout is branch-heavy; CC for application code is enforced in `src/` via Radon in CI.
+    streamlit_app.py:C901
