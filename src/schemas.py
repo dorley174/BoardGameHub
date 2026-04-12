@@ -46,16 +46,52 @@ class UserRead(UserBase):
 
 
 class GameBase(BaseModel):
-    gameName: str = Field(..., min_length=1, max_length=100)
+    """Common game fields."""
+
+    gameName: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        examples=["Catan"],
+        description="Display name of the board game.",
+    )
+
+    @field_validator("gameName")
+    @classmethod
+    def validate_game_name(cls, value: str) -> str:
+        """Trim and validate a game title."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Game name must not be empty.")
+        return normalized
 
 
-class GameCreate(GameBase):
-    pass
+class UserGameCreate(GameBase):
+    """Schema used to add a game to a user's collection."""
+
+    isAvailable: bool = Field(
+        default=True,
+        description="Whether the game is currently available.",
+    )
 
 
-class GameRead(GameBase):
+class UserGameStatusUpdate(BaseModel):
+    """Schema used to change a game's availability."""
+
+    isAvailable: bool = Field(
+        ...,
+        description="New availability status for the game.",
+    )
+
+
+class UserGameRead(BaseModel):
+    """Schema returned for a game owned by a user."""
+
+    userGameId: int
+    userId: int
     gameId: int
-    model_config = ConfigDict(from_attributes=True)
+    gameName: str
+    isAvailable: bool
 
 
 class GroupBase(BaseModel):

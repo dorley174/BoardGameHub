@@ -62,7 +62,7 @@ def test_create_group_adds_creator_as_member(client, session):
 
 def test_creator_can_invite_member_by_username(client, session):
     creator = create_user(session, "creator")
-    alice = create_user(session, "alice")
+    create_user(session, "alice")
 
     group_response = client.post(
         "/groups",
@@ -92,7 +92,7 @@ def test_creator_can_invite_member_by_username(client, session):
 def test_only_creator_can_invite(client, session):
     creator = create_user(session, "creator")
     bob = create_user(session, "bob")
-    alice = create_user(session, "alice")
+    create_user(session, "alice")
 
     group_response = client.post(
         "/groups",

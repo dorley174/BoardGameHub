@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Flake8
+        run: flake8 src tests streamlit_app.py
+
+      - name: Bandit (high severity only)
+        run: bandit -r src -c .bandit -lll
+
+      - name: Pytest with coverage (>= 60%)
+        run: pytest
+
+      - name: Radon cyclomatic complexity (CC < 10)
+        run: |
+          python << 'EOF'
+          import json
+          import subprocess
+          import sys
+
+          proc = subprocess.run(
+              ["radon", "cc", "-j", "-s", "src"],
+              capture_output=True,
+              text=True,
+              check=True,
+          )
+          data = json.loads(proc.stdout)
+
+          def walk_blocks(blocks):
+              for block in blocks:
+                  yield block
+                  for key in ("methods", "closures"):
+                      for child in block.get(key) or []:
+                          yield from walk_blocks([child])
+
+          failures = []
+          for path, blocks in data.items():
+              for block in walk_blocks(blocks):
+                  complexity = block.get("complexity")
+                  if complexity is None:
+                      continue
+                  if complexity >= 10:
+                      failures.append(
+                          f"{path}:{block.get('lineno')} "
+                          f"{block.get('type')} {block.get('name')!r} "
+                          f"CC={complexity}"
+                      )
+
+          if failures:
+              print("Cyclomatic complexity must stay below 10:")
+              for line in failures:
+                  print(" ", line)
+              sys.exit(1)
+          print("Radon: all reported blocks have CC < 10.")
+          EOF
