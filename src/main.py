@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import dotenv
 import os
+from contextlib import asynccontextmanager
 
 from .db import db
 from .api.users import router as users_router
@@ -12,12 +13,14 @@ HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", 8000))
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-app = FastAPI(title="BoardGameHub")
 
-
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     db.connect()
+    yield
+
+
+app = FastAPI(title="BoardGameHub", lifespan=lifespan)
 
 
 @app.get("/")
@@ -59,5 +62,4 @@ def internal_server_error(request: Request, exception: Exception):
 if __name__ == "__main__":
     import uvicorn
 
-    db.connect()
     uvicorn.run("src.main:app", host=HOST, port=PORT, reload=DEBUG)
