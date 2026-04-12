@@ -33,3 +33,60 @@ python -m bandit -r src
 python -m radon cc -a -s src
 python -m radon mi -s src
 ```
+
+## Quality Control
+
+### Run the app and demo
+
+1. Create a virtual environment and install dependencies:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+On macOS or Linux, activate with `source .venv/bin/activate` instead of `.venv\Scripts\activate`.
+
+2. Start the API (repository root):
+
+```bash
+python -m uvicorn src.main:app --reload
+```
+
+3. Streamlit demo (separate terminal):
+
+```bash
+streamlit run streamlit_app.py
+```
+
+### Tests and coverage
+
+`pytest.ini` already sets `--cov=src` and a **60%** coverage floor:
+
+```bash
+pytest
+pytest --cov=src
+pytest --cov=src --cov-report=term-missing
+```
+
+### Static analysis and metrics
+
+```bash
+flake8 src tests streamlit_app.py
+python -m flake8 src tests streamlit_app.py
+bandit -r src -c .bandit -lll
+python -m bandit -r src -c .bandit -lll
+radon cc -a -s src/
+python -m radon cc -a -s src/
+python -m radon mi -s src/
+```
+
+On every push and pull request, GitHub Actions (`.github/workflows/ci.yml`) installs dependencies and runs **flake8**, **bandit** (high severity only), **pytest** with **≥ 60%** coverage, and **radon** with cyclomatic complexity **CC < 10** for code under `src/`.
+
+### Pre-commit
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
